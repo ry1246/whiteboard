@@ -1,4 +1,5 @@
 import { WebSocketServer, WebSocket } from "ws";
+import { parseClientMessage } from "./messages.js";
 
 const PORT = 8080;
 
@@ -8,12 +9,16 @@ wss.on("connection", (ws) => {
   console.log("[connected] client connected. total:", wss.clients.size);
 
   ws.on("message", (data) => {
-    const message = data.toString();
+    const message = parseClientMessage(data.toString());
+    if (!message) {
+      console.warn("[invalid message] discarded:", data.toString());
+      return;
+    }
     console.log("[message]", message);
 
     for (const client of wss.clients) {
       if (client !== ws && client.readyState === WebSocket.OPEN) {
-        client.send(message);
+        client.send(JSON.stringify(message));
       }
     }
   });

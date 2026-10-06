@@ -1,10 +1,14 @@
 import { useEffect, useRef, useState } from "react";
 import "./App.css";
+import { type StrokeMessage, parseClientMessage } from "./messages";
+
+const WS_URL = "ws://localhost:8080";
 
 function App() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [isDrawing, setIsDrawing] = useState(false);
   const lastPointRef = useRef<{ x: number; y: number } | null>(null);
+  const wsRef = useRef<WebSocket | null>(null);
 
   const getCanvasPoint = (e: React.MouseEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current!;
@@ -15,6 +19,17 @@ function App() {
     };
   };
 
+  const drawLine = (from: { x: number; y: number }, to: { x: number; y: number }, color: string, width: number) => {
+    const ctx = canvasRef.current!.getContext("2d")!;
+    ctx.beginPath();
+    ctx.moveTo(from.x, from.y);
+    ctx.lineTo(to.x, to.y);
+    ctx.lineCap = "round";
+    ctx.lineWidth = width;
+    ctx.strokeStyle = color;
+    ctx.stroke();
+  };
+
   const handleMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
     setIsDrawing(true);
     lastPointRef.current = getCanvasPoint(e);
@@ -23,19 +38,22 @@ function App() {
   const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
     if (!isDrawing || !lastPointRef.current) return;
 
-    const canvas = canvasRef.current!;
-    const ctx = canvas.getContext("2d")!;
     const point = getCanvasPoint(e);
+    const from = lastPointRef.current;
 
-    ctx.beginPath();
-    ctx.moveTo(lastPointRef.current.x, lastPointRef.current.y);
-    ctx.lineTo(point.x, point.y);
-    ctx.lineCap = "round";
-    ctx.lineWidth = 2;
-    ctx.strokeStyle = "#000000";
-    ctx.stroke();
+    drawLine(from, point, "#000000", 2);
+
+    const message: StrokeMessage = {
+      type: "stroke",
+      from,
+      to: point,
+      color: "#000000",
+      width: 2,
+    };
+    wsRef.current?.send(JSON.stringify(message));
 
     lastPointRef.current = point;
+
   };
 
   const handleMouseUp = () => {
@@ -56,6 +74,21 @@ function App() {
 
     const ctx = canvas.getContext("2d")!;
     ctx.scale(dpr, dpr);
+  }, []);
+
+  useEffect(() => {
+    const ws = new WebSocket(WS_URL);
+    wsRef.current = ws;
+
+    ws.onmessage = (event) => {
+      const message = parseClientMessage(event.data);
+      if (!message) return;
+      drawLine(message.from, message.to, message.color, message.width);
+    };
+
+    return () => {
+      ws.close();
+    };
   }, []);
 
   return (

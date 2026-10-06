@@ -2,8 +2,7 @@ export type Point = { x: number, y: number };
 
 export type StrokeMessage = {
   type: "stroke";
-  from: Point;
-  to: Point;
+  points: Point[];
   color: string;
   width: number;
 }
@@ -21,7 +20,7 @@ function isStrokeMessage(v: unknown): v is StrokeMessage {
   const m = v as Record<string, unknown>;
   return (
     m.type === "stroke" &&
-    isPoint(m.from) && isPoint(m.to) &&
+    Array.isArray(m.points) && m.points.length >= 2 && m.points.every(isPoint) &&
     typeof m.color === "string" && typeof m.width === "number"
   );
 }

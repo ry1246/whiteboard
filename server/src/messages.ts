@@ -2,13 +2,15 @@ export type Point = { x: number, y: number };
 
 export type StrokeMessage = {
   type: "stroke";
-  from: Point;
-  to: Point;
+  points: Point[];
   color: string;
   width: number;
 }
 
-export type ClientMessage = StrokeMessage;
+export type HistoryMessage = {
+  type: "history";
+  strokes: StrokeMessage[];
+};
 
 function isPoint(v: unknown): v is Point {
   return (
@@ -23,7 +25,7 @@ function isStrokeMessage(v: unknown): v is StrokeMessage {
   const m = v as Record<string, unknown>;
   return (
     m.type === "stroke" &&
-    isPoint(m.from) && isPoint(m.to) &&
+    Array.isArray(m.points) && m.points.length >= 2 && m.points.every(isPoint) &&
     typeof m.color === "string" && typeof m.width === "number"
   );
 }
@@ -37,3 +39,5 @@ export function parseClientMessage(raw: string): ClientMessage | null {
   }
   return isStrokeMessage(parsed) ? parsed : null;
 }
+
+export type ClientMessage = StrokeMessage;

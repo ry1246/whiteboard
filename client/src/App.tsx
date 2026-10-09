@@ -1,12 +1,15 @@
 import { useEffect, useRef, useState } from "react";
 import "./App.css";
-import { type Point, type StrokeMessage, parseClientMessage } from "./messages";
+import { type Point, type StrokeMessage, parseServerMessage } from "./messages";
 
 const WS_URL = "ws://localhost:8080";
+
+type ConnectionStatus = "connecting" | "open" | "reconnecting";
 
 function App() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [isDrawing, setIsDrawing] = useState(false);
+  const [status, setStatus] = useState<ConnectionStatus>("connecting");
   const lastPointRef = useRef<Point | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
 
@@ -119,29 +122,76 @@ function App() {
   }, []);
 
   useEffect(() => {
-    const ws = new WebSocket(WS_URL);
-    wsRef.current = ws;
+    let ws: WebSocket;
+    let retry = 0;
+    let timerId: number | undefined;
+    let disposed = false;
 
-    ws.onmessage = (event) => {
-      const message = parseClientMessage(event.data);
-      if (!message) return;
-      drawPolyline(message.points, message.color, message.width);
+    const connect = () => {
+      ws = new WebSocket(WS_URL);
+      wsRef.current = ws;
+
+      ws.onopen = () => {
+        retry = 0;
+        setStatus("open");
+      };
+
+      ws.onmessage = (event) => {
+        const message = parseServerMessage(event.data);
+        if (!message) return;
+  
+        switch (message.type) {
+          case "stroke":
+            drawPolyline(message.points, message.color, message.width);
+            break;
+          case "history": {
+            const ctx = canvasRef.current!.getContext("2d")!;
+            ctx.clearRect(0, 0, 800, 600);
+            for (const s of message.strokes) {
+              drawPolyline(s.points, s.color, s.width);
+            }
+            break;
+          }
+        }
+      };
+
+      ws.onclose = () => {
+        if (disposed) return;
+        setStatus("reconnecting");
+        const delay = Math.min(1000 * 2 ** retry, 10000);
+        retry++;
+        timerId = window.setTimeout(connect, delay);
+      };
     };
 
+    connect();
+
     return () => {
+      disposed = true;
+      clearTimeout(timerId);
       ws.close();
     };
   }, []);
 
   return (
-    <canvas
-      ref={canvasRef}
-      onMouseDown={handleMouseDown}
-      onMouseMove={handleMouseMove}
-      onMouseUp={handleMouseUp}
-      onMouseLeave={handleMouseUp}
-      style={{ border: "1px solid #ccc", touchAction: "none" }}
-    />
+    <>
+      <p>
+        {status === "open"
+          ? "接続中"
+          : status === "connecting"
+            ? "接続しています"
+            : "切断されました。再接続中"}
+
+      </p>
+      <canvas
+        ref={canvasRef}
+        onMouseDown={handleMouseDown}
+        onMouseMove={handleMouseMove}
+        onMouseUp={handleMouseUp}
+        onMouseLeave={handleMouseUp}
+        style={{ border: "1px solid #ccc", touchAction: "none" }}
+      />
+    </>
   );
 }
 

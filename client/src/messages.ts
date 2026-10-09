@@ -7,6 +7,11 @@ export type StrokeMessage = {
   width: number;
 }
 
+export type HistoryMessage = {
+  type: "history";
+  strokes: StrokeMessage[];
+};
+
 function isPoint(v: unknown): v is Point {
   return (
     typeof v === "object" && v !== null &&
@@ -36,3 +41,24 @@ export function parseClientMessage(raw: string): ClientMessage | null {
 }
 
 export type ClientMessage = StrokeMessage;
+
+export type ServerMessage = StrokeMessage | HistoryMessage;
+
+function isHistoryMessage(v: unknown): v is HistoryMessage {
+  if (typeof v !== "object" || v === null) return false;
+  const m = v as Record<string, unknown>;
+  return m.type === "history" && Array.isArray(m.strokes) && m.strokes.every(isStrokeMessage);
+}
+
+export function parseServerMessage(raw: string): ServerMessage | null {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return null;
+  }
+
+  if (isStrokeMessage(parsed)) return parsed;
+  if (isHistoryMessage(parsed)) return parsed;
+  return null;
+}

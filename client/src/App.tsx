@@ -8,13 +8,19 @@ type ConnectionStatus = "connecting" | "open" | "reconnecting";
 
 function App() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const [isDrawing, setIsDrawing] = useState(false);
-  const [status, setStatus] = useState<ConnectionStatus>("connecting");
   const lastPointRef = useRef<Point | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
-
   const pendingPointsRef = useRef<Point[]>([]);
   const rafIdRef = useRef<number | null>(null);
+
+  const [isDrawing, setIsDrawing] = useState(false);
+  const [status, setStatus] = useState<ConnectionStatus>("connecting");
+  const [color, setColor] = useState("#000000");
+  const [lineWidth, setLineWidth] = useState(2);
+  const [tool, setTool] = useState<"pen" | "eraser">("pen");
+
+  const strokeColor = tool === "eraser" ? "#ffffff" : color;
+  const strokeWidth = tool === "eraser" ? lineWidth * 5 : lineWidth;
 
   const getCanvasPoint = (e: React.MouseEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current!;
@@ -56,8 +62,8 @@ function App() {
       const message: StrokeMessage = {
         type: "stroke",
         points,
-        color: "#000000",
-        width: 2,
+        color: strokeColor,
+        width: strokeWidth,
       };
       wsRef.current.send(JSON.stringify(message));
     }
@@ -85,7 +91,7 @@ function App() {
     const point = getCanvasPoint(e);
     const from = lastPointRef.current;
 
-    drawLine(from, point, "#000000", 2);
+    drawLine(from, point, strokeColor, strokeWidth);
 
     pendingPointsRef.current.push(point);
     scheduleFlush();
@@ -104,6 +110,16 @@ function App() {
     }
     flushPending();
     pendingPointsRef.current = [];
+  };
+
+  const clearCanvas = () => {
+    canvasRef.current!.getContext("2d")!.clearRect(0, 0, 800, 600);
+  };
+
+  const handleClear = () => {
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({ type: "clear" }));
+    }
   };
 
   useEffect(() => {
@@ -145,13 +161,15 @@ function App() {
             drawPolyline(message.points, message.color, message.width);
             break;
           case "history": {
-            const ctx = canvasRef.current!.getContext("2d")!;
-            ctx.clearRect(0, 0, 800, 600);
+            clearCanvas();
             for (const s of message.strokes) {
               drawPolyline(s.points, s.color, s.width);
             }
             break;
           }
+          case "clear":
+            clearCanvas();
+            break;
         }
       };
 
@@ -183,13 +201,31 @@ function App() {
             : "切断されました。再接続中"}
 
       </p>
+      <div style={{ marginBottom: 8, display: "flex", gap: 8, alignItems: "center" }}>
+        <input
+          type="color"
+          value={color}
+          onChange={(e) => { setColor(e.target.value); setTool("pen"); }}
+        />
+        <input
+          type="range"
+          min={1}
+          max={20}
+          value={lineWidth}
+          onChange={(e) => setLineWidth(Number(e.target.value))}
+        />
+        <span>{lineWidth}px</span>
+        <button onClick={() => setTool("pen")} disabled={tool === "pen"}>ペン</button>
+        <button onClick={() => setTool("eraser")} disabled={tool === "eraser"}>消しゴム</button>
+        <button onClick={handleClear} disabled={status !== "open"}>全消去</button>
+      </div>
       <canvas
         ref={canvasRef}
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
         onMouseLeave={handleMouseUp}
-        style={{ border: "1px solid #ccc", touchAction: "none" }}
+        style={{ border: "1px solid #ccc", touchAction: "none", backgroundColor: "#fff" }}
       />
     </>
   );

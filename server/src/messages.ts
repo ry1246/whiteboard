@@ -12,6 +12,10 @@ export type HistoryMessage = {
   strokes: StrokeMessage[];
 };
 
+export type ClearMessage = { type: "clear" };
+
+export type ClientMessage = StrokeMessage | ClearMessage;
+
 function isPoint(v: unknown): v is Point {
   return (
     typeof v === "object" && v !== null &&
@@ -30,6 +34,10 @@ function isStrokeMessage(v: unknown): v is StrokeMessage {
   );
 }
 
+function isClearMessage(v: unknown): v is ClearMessage {
+  return typeof v === "object" && v !== null && (v as Record<string, unknown>).type === "clear";
+}
+
 export function parseClientMessage(raw: string): ClientMessage | null {
   let parsed: unknown;
   try {
@@ -37,7 +45,7 @@ export function parseClientMessage(raw: string): ClientMessage | null {
   } catch {
     return null;
   }
-  return isStrokeMessage(parsed) ? parsed : null;
+  if (isStrokeMessage(parsed)) return parsed;
+  if (isClearMessage(parsed)) return { type: "clear" };
+  return null;
 }
-
-export type ClientMessage = StrokeMessage;

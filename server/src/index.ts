@@ -2,6 +2,7 @@ import { WebSocketServer, WebSocket } from "ws";
 import { parseClientMessage, type StrokeMessage, type HistoryMessage } from "./messages.js";
 
 const PORT = 8080;
+const MAX_HISTORY = 5000;
 const history: StrokeMessage[] = [];
 
 const wss = new WebSocketServer({ port: PORT });
@@ -20,7 +21,18 @@ wss.on("connection", (ws) => {
     }
     console.log("[message]", message);
 
+    if (message.type === "clear") {
+      history.length = 0;
+      for (const client of wss.clients) {
+        if (client.readyState === WebSocket.OPEN) {
+          client.send(JSON.stringify(message));
+        }
+      }
+      return;
+    }
+
     history.push(message);
+    if (history.length > MAX_HISTORY) history.shift();
 
     for (const client of wss.clients) {
       if (client !== ws && client.readyState === WebSocket.OPEN) {

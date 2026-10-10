@@ -5,12 +5,16 @@ export type StrokeMessage = {
   points: Point[];
   color: string;
   width: number;
-}
+};
 
 export type HistoryMessage = {
   type: "history";
   strokes: StrokeMessage[];
 };
+
+export type ClearMessage = { type: "clear" };
+export type ClientMessage = StrokeMessage | ClearMessage;
+export type ServerMessage = StrokeMessage | HistoryMessage | ClearMessage;
 
 function isPoint(v: unknown): v is Point {
   return (
@@ -30,6 +34,10 @@ function isStrokeMessage(v: unknown): v is StrokeMessage {
   );
 }
 
+function isClearMessage(v: unknown): v is ClearMessage {
+  return typeof v === "object" && v !== null && (v as Record<string, unknown>).type === "clear";
+}
+
 export function parseClientMessage(raw: string): ClientMessage | null {
   let parsed: unknown;
   try {
@@ -37,12 +45,10 @@ export function parseClientMessage(raw: string): ClientMessage | null {
   } catch {
     return null;
   }
-  return isStrokeMessage(parsed) ? parsed : null;
+  if (isStrokeMessage(parsed)) return parsed;
+  if (isClearMessage(parsed)) return { type: "clear" };
+  return null;
 }
-
-export type ClientMessage = StrokeMessage;
-
-export type ServerMessage = StrokeMessage | HistoryMessage;
 
 function isHistoryMessage(v: unknown): v is HistoryMessage {
   if (typeof v !== "object" || v === null) return false;
@@ -60,5 +66,6 @@ export function parseServerMessage(raw: string): ServerMessage | null {
 
   if (isStrokeMessage(parsed)) return parsed;
   if (isHistoryMessage(parsed)) return parsed;
+  if (isClearMessage(parsed)) return { type: "clear" };
   return null;
 }
